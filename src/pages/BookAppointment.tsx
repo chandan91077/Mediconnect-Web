@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import api from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useAssistantStore } from "@/store/assistantStore";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,7 @@ export default function BookAppointment() {
   const { doctorId } = useParams();
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading: authLoading, role } = useAuthContext();
+  const { uiBookingDate, uiBookingTime, triggerBookingSubmit } = useAssistantStore();
 
   const [doctor, setDoctor] = useState<Doctor | null>(null);
   const [loading, setLoading] = useState(true);
@@ -199,6 +201,27 @@ export default function BookAppointment() {
 
     fetchBookedSlotsAndAvailability();
   }, [doctorId, selectedDate]);
+
+  // Sync Voice Assistant selections to local component state
+  useEffect(() => {
+    if (uiBookingDate) {
+      setSelectedDate(new Date(uiBookingDate)); // Ensure it's a fresh Date object
+    }
+  }, [uiBookingDate]);
+
+  useEffect(() => {
+    if (uiBookingTime) {
+      setSelectedTime(uiBookingTime);
+    }
+  }, [uiBookingTime]);
+
+  // Auto-trigger booking when confirmed via Voice Assistant
+  useEffect(() => {
+    if (triggerBookingSubmit) {
+      handleBookAppointment();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [triggerBookingSubmit]);
 
   const handleBookAppointment = async () => {
     // More specific validation helps avoid the generic error when something else is missing

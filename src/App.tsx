@@ -4,6 +4,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { AssistantButton } from "@/components/assistant/AssistantButton";
+import { AssistantPopup } from "@/components/assistant/AssistantPopup";
+import { VoiceCommandOverlay } from "@/components/assistant/VoiceCommandOverlay";
 import React from 'react';
 
 const Index = React.lazy(() => import("./pages/Index"));
@@ -37,6 +41,22 @@ const Faq = React.lazy(() => import("./pages/Faq"));
 const ResetPassword = React.lazy(() => import("./pages/ResetPassword"));
 
 const queryClient = new QueryClient();
+
+/**
+ * MediAI Assistant overlay — rendered globally for authenticated users.
+ * Must be inside both BrowserRouter (for useNavigate) and AuthProvider.
+ */
+function MediAIAssistant() {
+  const { isAuthenticated } = useAuthContext();
+  if (!isAuthenticated) return null;
+  return (
+    <>
+      <AssistantButton />
+      <AssistantPopup />
+      <VoiceCommandOverlay />
+    </>
+  );
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -97,6 +117,9 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
           </React.Suspense>
+
+          {/* MediAI Assistant — global overlay for authenticated users */}
+          <MediAIAssistant />
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

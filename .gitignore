@@ -5,3 +5,5 @@ dist/
 build/
 .vite/
 serviceAccountKey.json
+server/serviceAccountKey.json
+.env.env.local

@@ -1,7 +1,10 @@
 const express = require('express');
+const http = require('http');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
+const { Server } = require('socket.io');
+const { initAssistantSocket } = require('./socket/assistantSocket');
 
 dotenv.config();
 const { startAutoCancellationJob } = require('./utils/cron-jobs');
@@ -67,12 +70,35 @@ app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/medical-records', require('./routes/medicalRecords'));
 app.use('/api/platform-settings', require('./routes/platformSettings'));
 
+// MediAI Assistant Route
+app.use('/api/assistant', require('./routes/assistant'));
+
 const PORT = process.env.PORT || 5000;
+
+// Create HTTP server and attach Socket.IO
+const server = http.createServer(app);
+
+const io = new Server(server, {
+    cors: {
+        origin: (origin, callback) => {
+            if (!origin || allowedOrigins.includes(origin) || localhostOriginPattern.test(origin)) {
+                return callback(null, true);
+            }
+            return callback(null, false);
+        },
+        credentials: true,
+        methods: ['GET', 'POST'],
+    },
+});
+
+// Initialize MediAI Socket.IO handler
+initAssistantSocket(io);
 
 // Start server only if not running in test environment
 if (!process.env.JEST_WORKER_ID) {
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
+        console.log(`[MediAI] Socket.IO initialized on port ${PORT}`);
         startAutoCancellationJob();
     });
 }
