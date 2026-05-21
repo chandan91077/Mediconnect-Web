@@ -302,11 +302,11 @@ export function executeAction(
  * Handle user input during an active booking flow
  * (Uses addMessage directly — no loading bubble in the booking continuation path)
  */
-function handleBookingFlowInput(
+export function handleBookingFlowInput(
   userText: string,
   activeFlow: BookingFlow,
   options: ActionEngineOptions
-): void {
+): { promptMessage: string, nextState: BookingState } {
   const { navigate, addMessage, setOpen, setActiveFlow, updateMessage, loadingId } = options;
 
   const currentState = flowToState(activeFlow);
@@ -336,5 +336,7 @@ function handleBookingFlowInput(
     const newFlow = stateToFlow(nextState as BookingState);
     setActiveFlow(newFlow);
   }
+
+  return { promptMessage, nextState };
 }
 

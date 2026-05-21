@@ -22,7 +22,7 @@ import { useAssistantStore } from '@/store/assistantStore';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { voiceService } from '@/assistant/VoiceService';
 import { parseIntent } from '@/assistant/IntentParser';
-import { executeAction } from '@/assistant/ActionEngine';
+import { executeAction, handleBookingFlowInput } from '@/assistant/ActionEngine';
 import { AssistantMessageBubble } from './AssistantMessage';
 import { QuickActions } from './QuickActions';
 import { VoiceWave } from './VoiceWave';
@@ -154,6 +154,26 @@ export function AssistantPopup() {
       setThinking(true);
 
       try {
+        // Intercept active booking flow locally (bypasses backend to save time & API quota)
+        if (activeFlow && !trimmed.toLowerCase().includes('cancel') && !trimmed.toLowerCase().includes('stop')) {
+          const { promptMessage } = handleBookingFlowInput(trimmed, activeFlow, {
+            navigate,
+            addMessage,
+            updateMessage,
+            loadingId,
+            setThinking,
+            setOpen,
+            activeFlow,
+            setActiveFlow,
+            userText: trimmed,
+          });
+
+          if (isSpeakEnabled && promptMessage) {
+            voiceService.speak(promptMessage);
+          }
+          return;
+        }
+
         // Parse intent via backend AI
         const response = await parseIntent(trimmed, sessionId, token);
 

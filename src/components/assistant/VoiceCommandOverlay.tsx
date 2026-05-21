@@ -308,17 +308,15 @@ export function VoiceCommandOverlay() {
            setActiveFlow(flow);
            greeting = getBookingPrompt('datetime');
         } else {
-           if (path === '/') greeting = "You are on the Home page. How can I help you today?";
-           else if (path.includes('/doctors')) greeting = "You are on the Doctors page. What kind of specialist are you looking for?";
-           else if (path.includes('/appointments') || path.includes('/past-appointments')) greeting = "You are viewing your appointments. Would you like to book a new one?";
-           else if (path.includes('/prescriptions')) greeting = "You are viewing your prescriptions. Need help finding anything?";
-           else if (path.includes('/dashboard')) greeting = "You are on your dashboard. How can I assist you?";
-           else if (path.includes('/messages') || path.includes('/chat')) greeting = "You are in your messages. Who would you like to chat with?";
+           // NO GREETING for normal pages — just listen silently!
+           greeting = '';
         }
         
-        setAiReplyText(greeting);
-        setVoiceStatus('done');
-        await voiceService.speak(greeting, { rate: 1.05 });
+        if (greeting) {
+          setAiReplyText(greeting);
+          setVoiceStatus('done');
+          await voiceService.speak(greeting, { rate: 1.05 });
+        }
         
         if (mounted) {
           setAiReplyText('');
