@@ -7,7 +7,7 @@
  *   User Input → Local Rule Parser → Embedding → Vector Search → RAG Context → GPT → Save Memory
  */
 
-const { callGPT, localFallbackParse } = require('../ai/gptClient');
+const { callGPT, localFallbackParse, translateToEnglish, translateFromEnglish } = require('../ai/gptClient');
 const { buildSystemPrompt, buildPersonalizedSystemPrompt } = require('../ai/systemPrompt');
 const {
   getHistory,
@@ -18,7 +18,7 @@ const {
 } = require('../ai/sessionMemory');
 const { emitToUser } = require('../socket/assistantSocket');
 const { buildRAGContext, formatMemoryForPrompt, getContextSummary } = require('../memory/ragContext');
-const { saveConversationMemory, trackSymptom, trackDoctorInteraction, saveUnfinishedWorkflow, clearUnfinishedWorkflow } = require('../memory/memoryManager');
+const { saveConversationMemory, trackSymptom, trackDoctorInteraction, saveUnfinishedWorkflow, clearUnfinishedWorkflow, getUserMemoryProfile } = require('../memory/memoryManager');
 const { detectSymptoms, isRecurringSymptom } = require('../personalization/symptomTracker');
 const { isResumeIntent, resumeWorkflow, buildWorkflowState } = require('../personalization/workflowContinuation');
 
@@ -45,10 +45,39 @@ async function processIntent(req, res) {
     const userName = user?.full_name || user?.name || 'User';
     const userId = user?._id?.toString();
 
+    // ── Get preferred language from memory profile early ──
+    let preferredLanguage = 'en-US';
+    let memoryProfile = null;
+    if (userId) {
+      try {
+        memoryProfile = await getUserMemoryProfile(userId);
+        preferredLanguage = memoryProfile?.aiPreferences?.language || 'en-US';
+      } catch (err) {
+        console.warn('[AssistantController] Early memory profile fetch error:', err?.message);
+      }
+    }
+
+    // ── Perform translation pre-pass for non-English speakers or multilingual inputs ──
+    let englishText = text;
+    if (preferredLanguage && !preferredLanguage.toLowerCase().startsWith('en')) {
+      englishText = await translateToEnglish(text, preferredLanguage);
+    } else {
+      // Even if preferredLanguage is English, check if text contains non-ASCII characters (e.g. Hindi script)
+      const isPureEnglishAscii = /^[a-zA-Z0-9\s,.\-!?()'"\n\r]*$/.test(text);
+      if (!isPureEnglishAscii) {
+        englishText = await translateToEnglish(text, preferredLanguage);
+      }
+    }
+
     // ── Step 1: Check for resume workflow intent (highest priority) ──
-    if (isResumeIntent(text)) {
+    if (isResumeIntent(englishText)) {
       const resumeResponse = await resumeWorkflow(userId);
       if (resumeResponse) {
+        // Translate the resume response back if target language is not English
+        if (resumeResponse.reply && preferredLanguage && !preferredLanguage.toLowerCase().startsWith('en')) {
+          resumeResponse.reply = await translateFromEnglish(resumeResponse.reply, preferredLanguage);
+        }
+
         // Save this exchange to memory
         await Promise.all([
           saveConversationMemory(userId, sessionId, 'user', text),
@@ -72,7 +101,7 @@ async function processIntent(req, res) {
     }
 
     // ── Step 2: Try local rule-based parser first (faster, no API cost) ──
-    const localResult = localFallbackParse(text, pageContext);
+    const localResult = localFallbackParse(englishText, pageContext);
 
     let actionResponse;
 
@@ -88,7 +117,7 @@ async function processIntent(req, res) {
     } else {
       if (userId) {
         try {
-          ragContext = await buildRAGContext(userId, text, sessionId);
+          ragContext = await buildRAGContext(userId, englishText, sessionId);
           memoryContextStr = formatMemoryForPrompt(ragContext);
           ctxSummary = getContextSummary(ragContext);
         } catch (ragError) {
@@ -105,7 +134,7 @@ async function processIntent(req, res) {
       const history = getHistory(sessionId, 8);
       const context = getContext(sessionId);
 
-      let enrichedText = text;
+      let enrichedText = englishText;
       if (context.lastSpecialization) {
         enrichedText = `[Context: User was looking for ${context.lastSpecialization}]\n${enrichedText}`;
       }
@@ -120,7 +149,7 @@ async function processIntent(req, res) {
     // ── Step 7: Personalization post-processing ──
     if (userId) {
       // Detect symptoms and check for recurring patterns
-      const detectedSymptoms = detectSymptoms(text);
+      const detectedSymptoms = detectSymptoms(englishText);
 
       if (detectedSymptoms.length > 0 && ragContext) {
         const profile = ragContext?.memoryProfile;
@@ -160,6 +189,20 @@ async function processIntent(req, res) {
       // Clear workflow when booking is explicitly completed/cancelled
       if (actionResponse.action === 'reply' && /booking.*(confirm|done|cancel|complet)/i.test(actionResponse.reply || '')) {
         await clearUnfinishedWorkflow(userId);
+      }
+    }
+
+    // ── Step 7.5: Post-translation pass (Translate replies/questions back to user's native language) ──
+    if (preferredLanguage && !preferredLanguage.toLowerCase().startsWith('en')) {
+      try {
+        if (actionResponse.reply) {
+          actionResponse.reply = await translateFromEnglish(actionResponse.reply, preferredLanguage);
+        }
+        if (actionResponse.question) {
+          actionResponse.question = await translateFromEnglish(actionResponse.question, preferredLanguage);
+        }
+      } catch (err) {
+        console.warn('[AssistantController] Post-translation failed (non-critical):', err?.message);
       }
     }
 

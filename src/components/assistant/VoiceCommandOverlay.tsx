@@ -25,6 +25,7 @@ import {
   type BookingState,
 } from '@/assistant/BookingWorkflow';
 import { buildBookingUrl, buildDoctorSearchByNameUrl } from '@/assistant/NavigationController';
+import { useMemoryLoader } from '@/hooks/useMemoryLoader';
 
 export function VoiceCommandOverlay() {
   const navigate = useNavigate();
@@ -54,9 +55,18 @@ export function VoiceCommandOverlay() {
     setTriggerBookingSubmit,
   } = useAssistantStore();
 
+  const { language } = useMemoryLoader();
+
   const token = session?.token || localStorage.getItem('token');
   const isProcessingRef = useRef(false);
   const [aiReplyText, setAiReplyText] = useState('');
+
+  // ─── Sync language preference ───────────────────────────────────────────────
+  useEffect(() => {
+    if (language) {
+      voiceService.setLanguage(language);
+    }
+  }, [language]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // processCommand — handles both booking flow (locally) and normal AI calls

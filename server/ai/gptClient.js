@@ -226,4 +226,89 @@ function localFallbackParse(text, pageContext = '') {
   return null; // No local match — defer to GPT
 }
 
-module.exports = { callGPT, localFallbackParse };
+/**
+ * Translates non-English or multilingual input text (like Hinglish) into standard English.
+ * Returns the original text if it's already standard English or if translation fails.
+ * 
+ * @param {string} text - User's spoken or typed message
+ * @param {string} preferredLanguage - User's preferred language (e.g. 'hi-IN', 'es-ES')
+ * @returns {Promise<string>} Translated English text
+ */
+async function translateToEnglish(text, preferredLanguage) {
+  if (!text || !text.trim()) return text;
+
+  const lang = (preferredLanguage || 'en').toLowerCase();
+  
+  // If language is English and text contains only English ASCII chars, skip OpenAI to save time/cost
+  const isPureEnglishAscii = /^[a-zA-Z0-9\s,.\-!?()'"\n\r]*$/.test(text);
+  if (lang.startsWith('en') && isPureEnglishAscii) {
+    return text;
+  }
+
+  try {
+    const openai = getOpenAIClient();
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `You are a real-time healthcare assistant translator. Translate the user's spoken or written health command into standard English.
+If the text is a mix of languages (like Hinglish, e.g. "appointment book karo", "prescription dikhao", "suno na"), translate the entire sentence to proper English.
+If the text is already in English, return it exactly as-is without any modification.
+Output ONLY the translated English text, with absolutely no extra commentary, explanations, or quotes.`
+        },
+        { role: 'user', content: text }
+      ],
+      temperature: 0.2,
+      max_tokens: 150,
+    });
+    const translated = response.choices[0]?.message?.content?.trim() || text;
+    console.log(`[Translator] Input: "${text}" | Preferred Lang: "${preferredLanguage}" | Translated to English: "${translated}"`);
+    return translated;
+  } catch (error) {
+    console.error('[Translator] translateToEnglish error:', error?.message);
+    return text;
+  }
+}
+
+/**
+ * Translates English response text back into the user's preferred language.
+ * Returns original text if preferred language is English or if translation fails.
+ * 
+ * @param {string} text - Healthcare assistant response in English
+ * @param {string} preferredLanguage - User's target language (e.g. 'hi-IN', 'es-ES')
+ * @returns {Promise<string>} Translated text in user's language
+ */
+async function translateFromEnglish(text, preferredLanguage) {
+  if (!text || !text.trim() || !preferredLanguage) return text;
+  
+  const lang = preferredLanguage.toLowerCase();
+  if (lang.startsWith('en')) return text;
+
+  try {
+    const openai = getOpenAIClient();
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `You are a professional medical translator. Translate the healthcare assistant's response to the user's preferred language: "${preferredLanguage}".
+- Preserve all medical terms, doctor names, emojis, Markdown formatting, and punctuation exactly.
+- Keep the tone polite, supportive, and professional.
+- Output ONLY the translated text in the target language. No introductory or concluding remarks, explanations, or quotes.`
+        },
+        { role: 'user', content: text }
+      ],
+      temperature: 0.3,
+      max_tokens: 500,
+    });
+    const translated = response.choices[0]?.message?.content?.trim() || text;
+    console.log(`[Translator] Translated reply from English to "${preferredLanguage}": "${translated}"`);
+    return translated;
+  } catch (error) {
+    console.error('[Translator] translateFromEnglish error:', error?.message);
+    return text;
+  }
+}
+
+module.exports = { callGPT, localFallbackParse, translateToEnglish, translateFromEnglish };

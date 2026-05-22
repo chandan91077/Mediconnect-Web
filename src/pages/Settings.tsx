@@ -17,8 +17,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { Loader2, User, Phone, Mail, ArrowLeft, Camera, Stethoscope, IndianRupee, Briefcase, FileText, Zap, MapPin, Bell } from "lucide-react";
+import { Loader2, User, Phone, Mail, ArrowLeft, Camera, Stethoscope, IndianRupee, Briefcase, FileText, Zap, MapPin, Bell, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useMemoryLoader } from "@/hooks/useMemoryLoader";
+
 
 const profileSchema = z.object({
   fullName: z.string().min(2, "Name must be at least 2 characters").max(100),
@@ -169,6 +171,138 @@ function NotificationPreferences() {
           onCheckedChange={(checked) => updatePreference('appointments', checked)}
           disabled={saving}
         />
+      </div>
+    </div>
+  );
+}
+
+function AICompanionPreferences() {
+  const { memoryProfile, isLoading, updateAIPreferences } = useMemoryLoader();
+  const [saving, setSaving] = useState(false);
+
+  if (isLoading && !memoryProfile) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-24 w-full" />
+      </div>
+    );
+  }
+
+  const prefs = memoryProfile?.aiPreferences || {
+    language: 'en-US',
+    verbosity: 'normal',
+    tone: 'friendly',
+    preferVoice: false,
+  };
+
+  const handleUpdate = async (key: string, value: any) => {
+    setSaving(true);
+    try {
+      await updateAIPreferences({ [key]: value });
+      toast.success(`${key === 'preferVoice' ? 'Voice preference' : key.charAt(0).toUpperCase() + key.slice(1) + ' preference'} updated!`);
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to update AI Companion preferences');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6 text-slate-200">
+      {/* Preferred Language */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-white/[0.02] border border-white/5 transition-all hover:bg-white/[0.04]">
+        <div>
+          <Label className="text-sm font-semibold text-slate-200">Preferred Language</Label>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Understanding, transcription, and translation language for voice commands
+          </p>
+        </div>
+        <select
+          value={prefs.language}
+          onChange={(e) => handleUpdate('language', e.target.value)}
+          disabled={saving}
+          className="bg-slate-900 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 min-w-[180px] cursor-pointer"
+        >
+          <option value="en-US">English (US)</option>
+          <option value="hi-IN">Hindi (हिंदी / Hinglish)</option>
+          <option value="es-ES">Spanish (Español)</option>
+        </select>
+      </div>
+
+      {/* Voice Output Toggle */}
+      <div className="flex items-center justify-between p-4 rounded-xl bg-white/[0.02] border border-white/5 transition-all hover:bg-white/[0.04]">
+        <div>
+          <Label htmlFor="voice-response" className="text-sm font-semibold text-slate-200">
+            Voice Responses
+          </Label>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Enable synthesized spoken responses from the AI companion
+          </p>
+        </div>
+        <Switch
+          id="voice-response"
+          checked={prefs.preferVoice}
+          onCheckedChange={(checked) => handleUpdate('preferVoice', checked)}
+          disabled={saving}
+        />
+      </div>
+
+      {/* AI Tone Choice - Segmented Control */}
+      <div className="flex flex-col gap-3 p-4 rounded-xl bg-white/[0.02] border border-white/5 transition-all hover:bg-white/[0.04]">
+        <div>
+          <Label className="text-sm font-semibold text-slate-200">AI Personality Tone</Label>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Adjust the warmth, language, and clinical precision of medical suggestions
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 bg-slate-950/60 p-1.5 rounded-lg border border-white/5">
+          {(['friendly', 'formal', 'clinical'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => handleUpdate('tone', t)}
+              disabled={saving}
+              type="button"
+              className={`py-1.5 px-3 rounded-md text-xs font-semibold capitalize tracking-wide transition-all duration-300 ${
+                prefs.tone === t
+                  ? 'bg-gradient-to-r from-teal-550 to-teal-400 bg-teal-500 text-slate-950 shadow-md font-bold scale-[1.02]'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Detail Level Choice - Segmented Control */}
+      <div className="flex flex-col gap-3 p-4 rounded-xl bg-white/[0.02] border border-white/5 transition-all hover:bg-white/[0.04]">
+        <div>
+          <Label className="text-sm font-semibold text-slate-200">AI Verbosity (Detail Level)</Label>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Control the length and complexity of responses
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 bg-slate-950/60 p-1.5 rounded-lg border border-white/5">
+          {(['brief', 'normal', 'detailed'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => handleUpdate('verbosity', v)}
+              disabled={saving}
+              type="button"
+              className={`py-1.5 px-3 rounded-md text-xs font-semibold capitalize tracking-wide transition-all duration-300 ${
+                prefs.verbosity === v
+                  ? 'bg-gradient-to-r from-violet-650 to-violet-500 bg-violet-600 text-white shadow-md font-bold scale-[1.02]'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              }`}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -649,6 +783,23 @@ export default function Settings() {
             </CardHeader>
             <CardContent>
               <NotificationPreferences />
+            </CardContent>
+          </Card>
+
+          {/* AI Companion Preferences */}
+          <Card className="backdrop-blur-md bg-white/[0.02] border-white/10 shadow-lg relative overflow-hidden transition-all duration-300 hover:border-teal-500/30">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-teal-500/10 to-violet-500/10 blur-2xl pointer-events-none rounded-full" />
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-white">
+                <Sparkles className="h-5 w-5 text-teal-400 animate-pulse" />
+                AI Companion Preferences
+              </CardTitle>
+              <CardDescription className="text-slate-400">
+                Customize your medical AI assistant's voice, tone, detail level, and language
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AICompanionPreferences />
             </CardContent>
           </Card>
 
