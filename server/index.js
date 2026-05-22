@@ -66,19 +66,19 @@ connectDB().then(async () => {
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
-app.use('/api/upload', require('./routes/upload'));
+app.use('/api/users', require('./routes/users'));
 app.use('/api/doctors', require('./routes/doctors'));
 app.use('/api/appointments', require('./routes/appointments'));
-app.use('/api/messages', require('./routes/messages'));
-app.use('/api/prescriptions', require('./routes/prescriptions'));
-app.use('/api/payments', require('./routes/payments'));
 app.use('/api/availability', require('./routes/availability'));
-app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/prescriptions', require('./routes/prescriptions'));
 app.use('/api/medical-records', require('./routes/medicalRecords'));
+app.use('/api/messages', require('./routes/messages'));
+app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/payments', require('./routes/payments'));
 app.use('/api/platform-settings', require('./routes/platformSettings'));
-
-// MediAI Assistant Route
+app.use('/api/upload', require('./routes/upload'));
 app.use('/api/assistant', require('./routes/assistant'));
+app.use('/api/assistant/report', require('./routes/assistantReport'));
 
 const PORT = process.env.PORT || 5000;
 

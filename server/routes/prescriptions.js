@@ -5,7 +5,15 @@ const router = express.Router();
 const Prescription = require('../models/Prescription');
 const Doctor = require('../models/Doctor');
 const Appointment = require('../models/Appointment');
+const MedicationReminder = require('../models/MedicationReminder');
 const { protect } = require('../middleware/authMiddleware');
+
+function parseFrequency(freq) {
+    const lower = freq.toLowerCase();
+    if (lower.includes('three') || lower.includes('thrice')) return ['09:00', '14:00', '20:00'];
+    if (lower.includes('two') || lower.includes('twice')) return ['09:00', '20:00'];
+    return ['09:00']; // default to once daily
+}
 
 router.get('/', protect, async (req, res) => {
     try {
@@ -130,8 +138,22 @@ router.post('/', protect, async (req, res) => {
                     prescription_id: prescription._id,
                 },
             });
+            
+            // Generate smart reminders
+            if (medications && medications.length > 0) {
+                const reminders = medications.map(med => ({
+                    user_id: appointment.patient_id,
+                    prescription_id: prescription._id,
+                    medication_name: med.name,
+                    dosage: med.dosage,
+                    times: parseFrequency(med.frequency || ''),
+                    is_active: true
+                }));
+                await MedicationReminder.insertMany(reminders);
+            }
+            
         } catch (nerr) {
-            console.error('Failed to create prescription notification', nerr);
+            console.error('Failed to create prescription notification/reminders', nerr);
         }
 
         const populatedPrescription = await Prescription.findById(prescription._id)

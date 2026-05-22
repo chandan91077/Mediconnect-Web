@@ -17,6 +17,7 @@ class VoiceService {
   private silenceTimer: ReturnType<typeof setTimeout> | null = null;
   private silenceTimeoutMs = 5000;        // stop after 5s of silence
   private gotResultThisSession = false;   // track if a result was received
+  private currentLang = 'en-US';          // track current language
 
   private onResult: OnResultCallback | null = null;
   private onError: OnErrorCallback | null = null;
@@ -43,7 +44,7 @@ class VoiceService {
     this.recognition = new SpeechRecognitionAPI();
     this.recognition.continuous = false;   // we manage restart ourselves for reliability
     this.recognition.interimResults = true;
-    this.recognition.lang = 'en-US';
+    this.recognition.lang = this.currentLang;
     this.recognition.maxAlternatives = 1;
 
     this.recognition.onresult = (event: SpeechRecognitionEvent) => {
@@ -170,6 +171,16 @@ class VoiceService {
   }
 
   /**
+   * Set the AI language for STT and TTS
+   */
+  setLanguage(langCode: string) {
+    this.currentLang = langCode;
+    if (this.recognition) {
+      this.recognition.lang = langCode;
+    }
+  }
+
+  /**
    * Start one-shot listening (used by chat popup mic button)
    */
   startListening(): boolean {
@@ -278,13 +289,24 @@ class VoiceService {
       utterance.rate = options?.rate ?? 1.05;
       utterance.pitch = options?.pitch ?? 1.0;
       utterance.volume = options?.volume ?? 1.0;
-      utterance.lang = 'en-US';
+      utterance.lang = this.currentLang;
 
       const voices = this.synthesis.getVoices();
-      const preferred = voices.find(
-        (v) => v.lang.startsWith('en') &&
-          (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Samantha'))
-      );
+      
+      // Try to find a voice matching the current language first
+      const langPrefix = this.currentLang.split('-')[0];
+      let preferred = voices.find(v => v.lang.startsWith(langPrefix) && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Premium')));
+      
+      // Fallback to any voice matching language
+      if (!preferred) {
+         preferred = voices.find(v => v.lang.startsWith(langPrefix));
+      }
+      
+      // Ultimate fallback to English
+      if (!preferred) {
+         preferred = voices.find(v => v.lang.startsWith('en'));
+      }
+      
       if (preferred) utterance.voice = preferred;
 
       let resolved = false;

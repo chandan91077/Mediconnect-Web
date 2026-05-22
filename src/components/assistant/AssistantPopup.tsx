@@ -16,6 +16,8 @@ import {
   Sparkles,
   Volume2,
   VolumeX,
+  Paperclip,
+  Image as ImageIcon,
 } from 'lucide-react';
 
 import { useAssistantStore } from '@/store/assistantStore';
@@ -23,6 +25,7 @@ import { useAuthContext } from '@/contexts/AuthContext';
 import { voiceService } from '@/assistant/VoiceService';
 import { parseIntent } from '@/assistant/IntentParser';
 import { executeAction, handleBookingFlowInput } from '@/assistant/ActionEngine';
+import { useMemoryLoader } from '@/hooks/useMemoryLoader';
 import { AssistantMessageBubble } from './AssistantMessage';
 import { QuickActions } from './QuickActions';
 import { VoiceWave } from './VoiceWave';
@@ -52,6 +55,8 @@ export function AssistantPopup() {
     setActiveFlow,
   } = useAssistantStore();
 
+  const { language } = useMemoryLoader();
+
   const [inputText, setInputText] = useState('');
   const [isSpeakEnabled, setIsSpeakEnabled] = useState(false);
   const [socketReady, setSocketReady] = useState(false);
@@ -59,6 +64,7 @@ export function AssistantPopup() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const token = session?.token || localStorage.getItem('token');
 
@@ -111,6 +117,13 @@ export function AssistantPopup() {
       setTimeout(() => inputRef.current?.focus(), 150);
     }
   }, [isOpen]);
+
+  // ─── Sync language preference ───────────────────────────────────────────────
+  useEffect(() => {
+    if (language) {
+      voiceService.setLanguage(language);
+    }
+  }, [language]);
 
   // ─── Voice service callbacks ───────────────────────────────────────────────
   useEffect(() => {
@@ -205,6 +218,62 @@ export function AssistantPopup() {
     },
     [inputText, isThinking, sessionId, token, activeFlow, isSpeakEnabled, navigate]
   );
+
+  // ─── File Upload Handler ───────────────────────────────────────────────────
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      addMessage({ role: 'assistant', content: '⚠️ File is too large. Please upload an image under 5MB.' });
+      return;
+    }
+
+    addMessage({ role: 'user', content: `Uploaded report: ${file.name}` });
+    const loadingId = addMessage({ role: 'assistant', content: '', isLoading: true });
+    setThinking(true);
+
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64String = reader.result as string;
+        
+        const { default: api } = await import('@/lib/api');
+        const { data } = await api.post('/assistant/report/analyze', { imageBase64: base64String });
+
+        if (data.success && data.data) {
+          const { diagnoses, vitals, summary } = data.data;
+          let replyText = `I've analyzed your report. ${summary}\n\n`;
+          
+          if (diagnoses?.length > 0) {
+            replyText += `**Detected Conditions:** ${diagnoses.join(', ')}\n`;
+          }
+          if (vitals && Object.keys(vitals).length > 0) {
+            replyText += `**Key Vitals:**\n`;
+            for (const [k, v] of Object.entries(vitals)) {
+              replyText += `- ${k}: ${v}\n`;
+            }
+          }
+          
+          replyText += `\n*I've securely updated your permanent health profile with this information.*`;
+          
+          if (isSpeakEnabled) voiceService.speak(`I've analyzed your report and updated your profile.`);
+          
+          updateMessage(loadingId, { isLoading: false, content: replyText, action: 'reply' });
+        } else {
+          throw new Error('Analysis failed');
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      updateMessage(loadingId, { isLoading: false, content: "Sorry, I couldn't process this report right now.", action: 'reply' });
+    } finally {
+      setThinking(false);
+      // Reset input
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   // ─── Voice toggle ──────────────────────────────────────────────────────────
   const toggleVoice = () => {
@@ -380,6 +449,25 @@ export function AssistantPopup() {
             `}
           >
             {isListening ? <MicOff size={15} /> : <Mic size={15} />}
+          </button>
+
+          {/* Hidden File Input */}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+
+          {/* Attachment button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            title="Upload medical report (Image)"
+            disabled={isThinking || isListening}
+            className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-white/40 hover:text-teal-400 hover:bg-teal-500/10 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <ImageIcon size={15} />
           </button>
 
           {/* Text input */}
