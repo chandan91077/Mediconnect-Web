@@ -2,6 +2,7 @@
  * MediAI Action Engine
  * Maps AI action responses to concrete UI operations.
  * Uses React Router's navigate + store state.
+ * Now supports memory-based workflow resumption.
  */
 
 import type { NavigateFunction } from 'react-router-dom';
@@ -26,6 +27,7 @@ export interface ActionEngineOptions {
   activeFlow: BookingFlow | null;
   setActiveFlow: (flow: BookingFlow | null) => void;
   userText?: string; // Original user input (needed for booking flow)
+  onWorkflowResumed?: () => void; // Callback to clear saved workflow after resume
 }
 
 /**
@@ -59,9 +61,17 @@ export function executeAction(
     activeFlow,
     setActiveFlow,
     userText = '',
+    onWorkflowResumed,
   } = options;
 
   const action = response.action;
+  // @ts-ignore — resumedWorkflow is a memory extension field
+  const resumedWorkflow = (response as any).resumedWorkflow === true;
+
+  // If this was a resumed workflow response, notify parent to clear saved state
+  if (resumedWorkflow && onWorkflowResumed) {
+    setTimeout(onWorkflowResumed, 2000); // Give user time to see the message first
+  }
 
   // Handle active booking flow — intercept any input during a booking
   if (activeFlow && action !== 'ask_followup' && action !== 'reply') {

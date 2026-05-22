@@ -26,6 +26,7 @@
         "node-cron": "^4.2.1",
         "nodemailer": "^7.0.12",
         "openai": "^6.38.0",
+        "redis": "^5.12.1",
         "socket.io": "^4.8.3"
     },
     "devDependencies": {

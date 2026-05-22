@@ -1,6 +1,7 @@
 /**
  * MediAI System Prompt Builder
  * Builds role-aware system prompts with embedded safety rules.
+ * Now supports personalized memory context injection via RAG.
  */
 
 const SAFETY_RULES = `
@@ -89,7 +90,10 @@ Tone: Professional, concise.
 `;
 
 /**
- * Build the system prompt based on user role and name
+ * Build the system prompt based on user role and name.
+ * @param {string} role - 'patient' | 'doctor' | 'admin'
+ * @param {string} userName - User's full name
+ * @returns {string} System prompt
  */
 function buildSystemPrompt(role = 'patient', userName = 'User') {
   const roleMap = {
@@ -103,4 +107,86 @@ function buildSystemPrompt(role = 'patient', userName = 'User') {
   return `${base}\n\nThe current user's name is: ${userName}. Their role is: ${role}.`;
 }
 
-module.exports = { buildSystemPrompt };
+/**
+ * Build a personalized system prompt with injected memory context (RAG).
+ * This is the upgraded version used when long-term memory is available.
+ *
+ * @param {string} role - 'patient' | 'doctor' | 'admin'
+ * @param {string} userName - User's full name
+ * @param {string} memoryContext - Formatted memory string from ragContext.formatMemoryForPrompt()
+ * @param {Object} contextSummary - Summary from ragContext.getContextSummary()
+ * @returns {string} Personalized system prompt
+ */
+function buildPersonalizedSystemPrompt(role = 'patient', userName = 'User', memoryContext = '', contextSummary = {}) {
+  const roleMap = {
+    patient: PATIENT_PROMPT,
+    doctor: DOCTOR_PROMPT,
+    admin: ADMIN_PROMPT,
+  };
+
+  const base = roleMap[role] || PATIENT_PROMPT;
+
+  // Build personalization instructions based on what memory we have
+  const personalizationRules = buildPersonalizationRules(contextSummary);
+
+  const memorySection = memoryContext
+    ? `\n\n${memoryContext}\n\nUSING MEMORY: Reference this context naturally when relevant. If user mentions a symptom you've seen before, acknowledge it. If there's an unfinished workflow, proactively offer to continue it.`
+    : '';
+
+  return [
+    base,
+    `The current user's name is: ${userName}. Their role is: ${role}.`,
+    personalizationRules,
+    memorySection,
+  ].filter(Boolean).join('\n\n');
+}
+
+/**
+ * Build personalization instruction block based on context summary.
+ * @param {Object} summary
+ * @returns {string}
+ */
+function buildPersonalizationRules(summary = {}) {
+  const rules = [];
+
+  if (summary.hasRecurringSymptoms && summary.recurringSymptoms?.length > 0) {
+    rules.push(
+      `PERSONALIZATION: This user has recurring symptoms: ${summary.recurringSymptoms.join(', ')}. ` +
+      `When they mention these again, acknowledge the pattern (e.g., "I see you've been experiencing this before") ` +
+      `and suggest the appropriate specialist if not already seen.`
+    );
+  }
+
+  if (summary.hasHealthHistory && summary.topConditions?.length > 0) {
+    rules.push(
+      `HEALTH HISTORY: User has these known conditions: ${summary.topConditions.join(', ')}. ` +
+      `Factor this into your specialist suggestions and responses.`
+    );
+  }
+
+  if (summary.hasPreferredDoctors && summary.preferredDoctors?.length > 0) {
+    const docNames = summary.preferredDoctors.map(d => `Dr. ${d.doctorName}`).join(', ');
+    rules.push(
+      `PREFERRED DOCTORS: User has previously seen: ${docNames}. ` +
+      `When suggesting doctors, mention their preferred doctors first if relevant.`
+    );
+  }
+
+  if (summary.hasActiveWorkflow) {
+    rules.push(
+      `ACTIVE WORKFLOW: User has an unfinished ${summary.activeWorkflowType}. ` +
+      `If they don't explicitly continue it, don't force it, but mention it's available if they want to resume.`
+    );
+  }
+
+  if (summary.totalInteractions > 0) {
+    const returnVisit = summary.totalInteractions > 1
+      ? `This is a returning user (${summary.totalInteractions} previous conversations). Greet them warmly.`
+      : `This is a new user. Be welcoming.`;
+    rules.push(returnVisit);
+  }
+
+  return rules.length > 0 ? `PERSONALIZATION RULES:\n${rules.join('\n')}` : '';
+}
+
+module.exports = { buildSystemPrompt, buildPersonalizedSystemPrompt };

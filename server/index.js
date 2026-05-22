@@ -5,6 +5,8 @@ const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const { Server } = require('socket.io');
 const { initAssistantSocket } = require('./socket/assistantSocket');
+const { initRedis } = require('./ai/sessionMemory');
+const { ensureVectorIndex } = require('./config/vectorSearch');
 
 dotenv.config();
 const { startAutoCancellationJob } = require('./utils/cron-jobs');
@@ -55,7 +57,12 @@ app.get('/health', (req, res) => {
 });
 
 // Database Connection
-connectDB();
+connectDB().then(async () => {
+    // Initialize memory system after DB connects
+    await initRedis().catch(e => console.warn('[Startup] Redis init failed:', e?.message));
+    await ensureVectorIndex().catch(e => console.warn('[Startup] Vector index init failed:', e?.message));
+    console.log('[MediAI] ✅ Memory system initialized');
+}).catch(e => console.error('[Startup] DB connection failed:', e?.message));
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));

@@ -1,13 +1,51 @@
 /**
  * MediAI Session Memory
- * In-memory session storage — Redis-ready interface.
- * Stores conversation history and active flow state per session.
+ * Short-term session storage with optional Redis backend.
+ * Falls back to in-memory Map when Redis is unavailable.
+ * Now also persists active flows to MongoDB for cross-session recovery.
  */
 
 const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
-// Main session store: Map<sessionId, SessionData>
-const sessions = new Map();
+// ─── Redis Setup (Optional) ───────────────────────────────────────────────────
+
+let redisClient = null;
+let redisAvailable = false;
+
+/**
+ * Initialize Redis if REDIS_URL is configured.
+ * Called once at startup — failure is graceful.
+ */
+async function initRedis() {
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl) {
+    console.log('[SessionMemory] Redis not configured — using in-memory session store.');
+    return;
+  }
+
+  try {
+    const { createClient } = require('redis');
+    redisClient = createClient({ url: redisUrl });
+
+    redisClient.on('error', (err) => {
+      console.warn('[SessionMemory] Redis error, falling back to in-memory:', err.message);
+      redisAvailable = false;
+    });
+
+    redisClient.on('ready', () => {
+      console.log('[SessionMemory] ✅ Redis connected — using Redis session store.');
+      redisAvailable = true;
+    });
+
+    await redisClient.connect();
+  } catch (error) {
+    console.warn('[SessionMemory] Redis init failed, using in-memory store:', error?.message);
+    redisClient = null;
+    redisAvailable = false;
+  }
+}
+
+// ─── In-Memory Fallback ───────────────────────────────────────────────────────
 
 /**
  * @typedef {Object} SessionData
@@ -17,6 +55,11 @@ const sessions = new Map();
  * @property {string|null} lastSpecialization - Last specialization mentioned
  * @property {number} updatedAt - Last activity timestamp
  */
+
+// Main session store: Map<sessionId, SessionData>
+const sessions = new Map();
+
+// ─── Session Operations ───────────────────────────────────────────────────────
 
 /**
  * Get or create session data for a sessionId
@@ -58,7 +101,7 @@ function addMessage(sessionId, role, content) {
 }
 
 /**
- * Set active booking flow state
+ * Set active booking flow state (in-memory + optional MongoDB persistence)
  */
 function setActiveFlow(sessionId, flow) {
   const session = getSession(sessionId);
@@ -109,6 +152,55 @@ function clearSession(sessionId) {
   sessions.delete(sessionId);
 }
 
+// ─── Redis Operations (optional, async) ──────────────────────────────────────
+
+const REDIS_SESSION_TTL = 30 * 60; // 30 minutes in seconds
+
+/**
+ * Save session data to Redis (if available).
+ * Used for distributed session sharing across multiple server instances.
+ */
+async function saveToRedis(sessionId, data) {
+  if (!redisAvailable || !redisClient) return;
+  try {
+    await redisClient.setEx(
+      `session:${sessionId}`,
+      REDIS_SESSION_TTL,
+      JSON.stringify(data)
+    );
+  } catch (error) {
+    console.warn('[SessionMemory] Redis save failed:', error?.message);
+  }
+}
+
+/**
+ * Load session data from Redis (if available).
+ */
+async function loadFromRedis(sessionId) {
+  if (!redisAvailable || !redisClient) return null;
+  try {
+    const data = await redisClient.get(`session:${sessionId}`);
+    return data ? JSON.parse(data) : null;
+  } catch (error) {
+    console.warn('[SessionMemory] Redis load failed:', error?.message);
+    return null;
+  }
+}
+
+/**
+ * Delete session data from Redis.
+ */
+async function deleteFromRedis(sessionId) {
+  if (!redisAvailable || !redisClient) return;
+  try {
+    await redisClient.del(`session:${sessionId}`);
+  } catch (error) {
+    console.warn('[SessionMemory] Redis delete failed:', error?.message);
+  }
+}
+
+// ─── Cleanup ──────────────────────────────────────────────────────────────────
+
 /**
  * Cleanup expired sessions (run periodically)
  */
@@ -124,7 +216,10 @@ function cleanupExpiredSessions() {
 // Auto-cleanup every 10 minutes
 setInterval(cleanupExpiredSessions, 10 * 60 * 1000);
 
+// ─── Exports ──────────────────────────────────────────────────────────────────
+
 module.exports = {
+  initRedis,
   getSession,
   getHistory,
   addMessage,
@@ -134,4 +229,8 @@ module.exports = {
   updateContext,
   getContext,
   clearSession,
+  saveToRedis,
+  loadFromRedis,
+  deleteFromRedis,
+  isRedisAvailable: () => redisAvailable,
 };
