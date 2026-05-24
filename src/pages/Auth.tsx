@@ -68,11 +68,12 @@ export default function Auth() {
     if (isAuthenticated && role) {
       if (role === "admin") {
         navigate("/admin");
-      } else if (role === "doctor") {
-        navigate("/doctor");
-      } else {
+      } else if (role === "patient") {
         navigate("/dashboard");
       }
+      // Doctors are NOT auto-navigated here.
+      // handleGoogleSignIn and handleSignUp manage doctor navigation
+      // explicitly (→ /doctor/register or → /doctor).
     }
   }, [isAuthenticated, role, navigate]);
 

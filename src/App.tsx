@@ -8,6 +8,7 @@ import { useAuthContext } from "@/contexts/AuthContext";
 import { AssistantButton } from "@/components/assistant/AssistantButton";
 import { AssistantPopup } from "@/components/assistant/AssistantPopup";
 import { VoiceCommandOverlay } from "@/components/assistant/VoiceCommandOverlay";
+import { DoctorVerificationGuard } from "@/components/DoctorVerificationGuard";
 import React from 'react';
 
 const Index = React.lazy(() => import("./pages/Index"));
@@ -84,21 +85,21 @@ const App = () => (
               <Route path="/doctor" element={<DoctorDashboard />} />
               <Route path="/doctor-dashboard" element={<DoctorDashboard />} />
               <Route path="/doctor/register" element={<DoctorRegister />} />
-              <Route path="/doctor/past-appointments" element={<PastAppointments />} />
+              <Route path="/doctor/past-appointments" element={<DoctorVerificationGuard><PastAppointments /></DoctorVerificationGuard>} />
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/doctors" element={<Doctors />} />
-              <Route path="/book/:doctorId" element={<BookAppointment />} />
+              <Route path="/book/:doctorId" element={<DoctorVerificationGuard><BookAppointment /></DoctorVerificationGuard>} />
               <Route path="/doctor/:doctorId" element={<DoctorProfile />} />
-              <Route path="/payment/:appointmentId" element={<Payment />} />
-              <Route path="/appointments" element={<Appointments />} />
-              <Route path="/chat" element={<Messages />} />
-              <Route path="/chat/:appointmentId" element={<Chat />} />
-              <Route path="/messages" element={<Messages />} />
-              <Route path="/prescriptions" element={<Prescriptions />} />
-              <Route path="/medical-documents" element={<MedicalDocuments />} />
-              <Route path="/records" element={<MedicalDocuments />} />
-              <Route path="/notifications" element={<NotificationsPage />} />
-              <Route path="/settings" element={<Settings />} />
+              <Route path="/payment/:appointmentId" element={<DoctorVerificationGuard><Payment /></DoctorVerificationGuard>} />
+              <Route path="/appointments" element={<DoctorVerificationGuard><Appointments /></DoctorVerificationGuard>} />
+              <Route path="/chat" element={<DoctorVerificationGuard><Messages /></DoctorVerificationGuard>} />
+              <Route path="/chat/:appointmentId" element={<DoctorVerificationGuard><Chat /></DoctorVerificationGuard>} />
+              <Route path="/messages" element={<DoctorVerificationGuard><Messages /></DoctorVerificationGuard>} />
+              <Route path="/prescriptions" element={<DoctorVerificationGuard><Prescriptions /></DoctorVerificationGuard>} />
+              <Route path="/medical-documents" element={<DoctorVerificationGuard><MedicalDocuments /></DoctorVerificationGuard>} />
+              <Route path="/records" element={<DoctorVerificationGuard><MedicalDocuments /></DoctorVerificationGuard>} />
+              <Route path="/notifications" element={<DoctorVerificationGuard><NotificationsPage /></DoctorVerificationGuard>} />
+              <Route path="/settings" element={<DoctorVerificationGuard><Settings /></DoctorVerificationGuard>} />
               <Route path="/specializations" element={<Specializations />} />
               <Route path="/about" element={<AboutUs />} />
               <Route path="/contact" element={<Contact />} />
