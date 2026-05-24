@@ -13,6 +13,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { Heart, Loader2, ArrowLeft, Eye, EyeOff } from "lucide-react";
+import api from "@/lib/api";
 
 const signInSchema = z.object({
   email: z.string().email("Please enter a valid email"),

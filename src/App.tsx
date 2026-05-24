@@ -38,7 +38,6 @@ const PrivacyPolicy = React.lazy(() => import("./pages/PrivacyPolicy"));
 const TermsOfService = React.lazy(() => import("./pages/TermsOfService"));
 const Benefits = React.lazy(() => import("./pages/Benefits"));
 const Faq = React.lazy(() => import("./pages/Faq"));
-
 const ResetPassword = React.lazy(() => import("./pages/ResetPassword"));
 
 const queryClient = new QueryClient();
